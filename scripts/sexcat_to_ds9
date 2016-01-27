@@ -1,0 +1,126 @@
+#!/usr/bin/python
+"""
+Convert a Sextractor catalog into ds9 regions for display.
+sexcat_to_ds9 -grow X -coords j2000|image|win_image file1.cat [... filen.cat]
+"""
+# TODO: Command-line options to control labels
+import os.path
+import SextractorTools
+
+_circ_fmt = 'circle({0:.5f},{1:.5f},{4:}) # text={{{2:d}}} color={3:}\n'
+_ellipse_fmt = ('ellipse({:.5f},{:.5f},{:.5f},{:.5f},{:.5f}) ' +
+                '# text={{{:d}}} color={}\n')
+
+_img_xy = ('X_IMAGE', 'Y_IMAGE')
+_img_ellipse = ('A_IMAGE', 'B_IMAGE', 'THETA_IMAGE')
+_winimg_xy = ('XWIN_IMAGE', 'YWIN_IMAGE')
+_winimg_ellipse = ('AWIN_IMAGE', 'BWIN_IMAGE', 'THETAWIN_IMAGE')
+_world_xy = ('ALPHA_J2000', 'DELTA_J2000')
+_world_ellipse = ('A_WORLD', 'B_WORLD', 'THETA_WORLD')
+
+
+def _get_coord_info(colnames, coord_type=None):
+    colnames = set(colnames)
+    if coord_type is None:
+        if colnames.issuperset(_img_xy):
+            coord_type = 'image'
+        elif colnames.issuperset(_winimg_xy):
+            coord_type = 'win_image'
+        elif colnames.issuperset(_world_xy):
+            coord_type = 'j2000'
+        else:
+            raise ValueError('Unable to determine coordinate format')
+
+    coord_keys = dict()
+    ds9_fmt = 'image'
+    ds9_rad = '5.0'  # pixels
+    if coord_type in ('j2000', 'fk5', 'world'):
+        coord_keys['x'], coord_keys['y'] = _world_xy
+        ds9_fmt = 'fk5'
+        ds9_rad = '1.0"'
+        if colnames.issuperset(_world_ellipse):
+            coord_keys.update(zip(('a', 'b', 'theta'), _world_ellipse))
+    elif coord_type in ('image',):
+        coord_keys['x'], coord_keys['y'] = _img_xy
+        if colnames.issuperset(_img_ellipse):
+            coord_keys.update(zip(('a', 'b', 'theta'), _img_ellipse))
+    elif coord_type in ('win_image',):
+        coord_keys['x'], coord_keys['y'] = _winimg_xy
+        if colnames.issuperset(_winimg_ellipse):
+            coord_keys.update(zip(('a', 'b', 'theta'), _winimg_ellipse))
+    else:
+        raise ValueError('Unknown coordinate type: {}'.format(coord_type))
+
+    if not set(coord_keys.keys()).issuperset(('x', 'y')):
+        raise ValueError('Missing x/y keys for coordinate type {}'.format(
+            coord_type))
+    return coord_keys, ds9_fmt, ds9_rad
+
+def make_ds9_regions(catfile, grow=2.5, coords=None):
+    catalog = SextractorTools.read_catalog(catfile)
+
+    colnames = set(catalog.dtype.names)
+
+    try:
+        col_keys, coord_fmt, circ_size = _get_coord_info(colnames, coords)
+    except ValueError as err:
+        print(err)
+        return
+
+    # Make sure there is a field for object number
+    obj_nums = catalog['NUMBER'] if 'NUMBER' in colnames else \
+        range(len(catalog[col_keys['x']]))
+
+    if 'FLAGS' in colnames:
+        colors = ['red' if flag > 0 else 'green'
+                  for flag in catalog['FLAGS']]
+    else:
+        colors = ['green']*len(catalog[col_keys['x']])
+
+    with open(os.path.splitext(catfile)[0] + '.reg', 'w') as regFile:
+        regFile.write(coord_fmt + '\n')
+
+        # TODO: multiply circular sizes by grow. Add arcsec tick to a/b
+        # Do little circles if there are only positions
+        if 'a' not in col_keys:
+            for params in zip(catalog[col_keys['x']], catalog[col_keys['y']],
+                              obj_nums, colors):
+                regFile.write(_circ_fmt.format(*(params + (circ_size,))))
+        # Do the full ellipse if all ellipse parameters are there
+        else:
+            # Rotation is the wrong sense if the coordinates are fk5?
+            if coord_fmt == 'fk5':
+                catalog[col_keys['theta']] = -catalog[col_keys['theta']]
+            catalog[col_keys['a']] *= grow
+            catalog[col_keys['b']] *= grow
+            for params in zip(catalog[col_keys['x']], catalog[col_keys['y']],
+                              catalog[col_keys['a']], catalog[col_keys['b']],
+                              catalog[col_keys['theta']], obj_nums, colors):
+                regFile.write(_ellipse_fmt.format(*params))
+
+if __name__ == '__main__':
+    import sys
+    # get command line args. file or list of files.
+    to_convert = sys.argv[1:]
+
+    if len(to_convert) == 0:
+        print(__doc__)
+        exit(1)
+
+    # Grow factor is kron factor for mag_auto
+    if '-grow' in to_convert:
+        argIndex = to_convert.index('-grow')
+        growFactor = float(to_convert[argIndex + 1])
+        del to_convert[argIndex:argIndex + 2]
+    else:
+        growFactor = 2.5
+
+    if '-coords' in to_convert:
+        argIndex = to_convert.index('-coords')
+        coord_type = to_convert[argIndex + 1]
+        del to_convert[argIndex:argIndex + 2]
+    else:
+        coord_type = None
+
+    for catfile in to_convert:
+        make_ds9_regions(catfile, grow=growFactor, coords=coord_type)
