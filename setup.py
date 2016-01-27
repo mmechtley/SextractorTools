@@ -3,7 +3,7 @@ from distutils.core import setup
 setup(
     name='SextractorTools',
     version='1.0',
-    packages=[''],
+    packages=['SextractorTools'],
     url='',
     license='BSD',
     author='Matt Mechtley',
