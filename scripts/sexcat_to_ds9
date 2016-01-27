@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """
 Convert a Sextractor catalog into ds9 regions for display.
 sexcat_to_ds9 -grow X -coords j2000|image|win_image file1.cat [... filen.cat]
