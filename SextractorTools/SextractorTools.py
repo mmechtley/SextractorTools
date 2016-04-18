@@ -1,28 +1,12 @@
-from numpy import genfromtxt, append
-from astropy.io import fits
+from numpy import append
+from astropy.io import fits, ascii
 
 
 def _read_ascii_head(catfile, keep_cols=None):
-
-    col_names = []
-    # Read in columns names from file header for ASCII_HEAD
-    fd = open(catfile)
-    for line in fd:
-        # Stop when end of comments reached
-        if not line.startswith('#'):
-            break
-        col_names += [line.split()[2]]
-    fd.close()
-
-    genfromtxt_args = dict()
+    table = ascii.read(catfile, format='sextractor')
     if keep_cols is not None:
-        inds, col_names = zip(*[(i, name) for i, name in enumerate(col_names)
-                                if name in keep_cols])
-        genfromtxt_args['usecols'] = inds
-    if len(col_names) > 0:
-        genfromtxt_args['names'] = col_names
-
-    return genfromtxt(catfile, dtype=None, **genfromtxt_args)
+        table = table[keep_cols]
+    return table
 
 
 def _read_fits_ldac(catfile, keep_cols=None):
