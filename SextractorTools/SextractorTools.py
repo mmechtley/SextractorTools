@@ -3,10 +3,10 @@ from astropy.io import fits, ascii
 
 
 def _read_ascii_head(catfile, keep_cols=None):
-    table = ascii.read(catfile, format='sextractor')
+    catalog = ascii.read(catfile, format='sextractor')
     if keep_cols is not None:
-        table = table[keep_cols]
-    return table
+        catalog = catalog[keep_cols]
+    return catalog
 
 
 def _read_fits_ldac(catfile, keep_cols=None):
@@ -23,9 +23,8 @@ def _read_fits_ldac(catfile, keep_cols=None):
         raise ValueError('No LDAC_OBJECTS extensions found')
 
     if keep_cols is not None:
-        return catalog[keep_cols]
-    else:
-        return catalog
+        catalog = catalog[keep_cols]
+    return catalog
 
 
 def read_catalog(catfile, keep_cols=None):
